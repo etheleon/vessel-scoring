@@ -15,17 +15,17 @@ import datetime
 
 all_data = ['kristina_trawl', 'kristina_longliner', 'kristina_ps'] + ['slow-transits'] * 10
 untrained_models = {
-    'Logistic':               {'model': vessel_scoring.logistic_model.LogisticModel(windows=[43200], order=6), 'data': all_data},
+    'Logistic':               {'model': vessel_scoring.logistic_model.LogisticModel(windows=[1800, 3600, 10800, 21600, 43200, 86400], order=6), 'data': all_data},
 
-    'Logistic--Longliner':    {'model': vessel_scoring.logistic_model.LogisticModel(windows=[43200], order=6),
+    'Logistic--Longliner':    {'model': vessel_scoring.logistic_model.LogisticModel(windows=[1800, 3600, 10800, 21600, 43200, 86400], order=6),
                                'data': ['kristina_longliner'] + ['slow-transits'] * 10},
-    'Logistic--Trawler':      {'model': vessel_scoring.logistic_model.LogisticModel(windows=[43200], order=6),
+    'Logistic--Trawler':      {'model': vessel_scoring.logistic_model.LogisticModel(windows=[1800, 3600, 10800, 21600, 43200, 86400], order=6),
                                'data': ['kristina_trawl'] + ['slow-transits'] * 10},
-    'Logistic--Purse seine':  {'model': vessel_scoring.logistic_model.LogisticModel(windows=[43200], order=6),
+    'Logistic--Purse seine':  {'model': vessel_scoring.logistic_model.LogisticModel(windows=[1800, 3600, 10800, 21600, 43200, 86400], order=6),
                                'data': ['kristina_ps'] + ['slow-transits'] * 10},
 
-    'Logistic opt MSE':       {'model': vessel_scoring.logistic_model.LogisticModel(windows=[43200], order=4, cross=3), 'data': all_data},
-    'Random Forest':          {'model': vessel_scoring.random_forest_model.RandomForestModel(windows=[43200]), 'data': all_data},
+    'Logistic opt MSE':       {'model': vessel_scoring.logistic_model.LogisticModel(windows=[1800, 3600, 10800, 21600, 43200, 86400], order=4, cross=3), 'data': all_data},
+    'Random Forest':          {'model': vessel_scoring.random_forest_model.RandomForestModel(windows=[1800, 3600, 10800, 21600, 43200, 86400]), 'data': all_data},
     'Legacy':                 {'model': vessel_scoring.legacy_heuristic_model.LegacyHeuristicModel(window=3600), 'data': all_data},
     "Legacy (12 Hour)":       {'model': vessel_scoring.legacy_heuristic_model.LegacyHeuristicModel(window=43200), 'data': all_data},
 #     'Logistic (MW)':        {'model': vessel_scoring.logistic_model.LogisticModel(windows=[1800, 3600, 10800, 21600, 43200, 86400], order=6), 'data': all_data},
@@ -73,7 +73,7 @@ def train_models(models = None, train = None, save=True):
 
 def load_models():
     res = {}
-    
+
     for filename in os.listdir(models_path):
         with open(os.path.join(models_path, filename)) as f:
             conf = json.load(f)
