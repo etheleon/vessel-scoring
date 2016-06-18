@@ -43,7 +43,7 @@ class NNetModel:
     HIDDEN_1 = 1024
     HIDDEN_2 = 1024
     BATCH_SIZE = 128
-    TRAIN_DIR = "."
+    TRAIN_DIR = "dumps"
     DECAY_SCALE = 0.98
 
     N_WINDOWS = 6
@@ -355,9 +355,6 @@ class NNetModel:
       # test on .
     #   data_sets = input_data.read_data_sets(FLAGS.train_dir, FLAGS.fake_data)
 
-
-
-
       # Tell TensorFlow that the model will be built into the default Graph.
       with tf.Graph().as_default():
         # Generate placeholders for the features and labels.
@@ -437,7 +434,7 @@ class NNetModel:
               if epoch != last_epoch or epoch >= self.MAX_EPOCHS:
                 learning_rate.assign(0.95 * learning_rate)
                 # Save a checkpoint and evaluate the model .
-                saver.save(sess, self.TRAIN_DIR, global_step=step)
+                saver.save(sess, self.TRAIN_DIR + '/save', global_step=step)
                 # Evaluate against the training set.
                 print("Epoch:", epoch)
                 self.do_eval(sess,
