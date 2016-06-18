@@ -26,13 +26,25 @@ import numpy as np
 import time
 
 
+def leaky_relu(x, alpha=0.01):
+    return tf.maximum(alpha*x,x)
+
+def maxout(x, width):
+    bsize = tf.shape(x)[0]
+    return tf.reshape(
+        tf.nn.max_pool(
+            tf.reshape(x, (bsize, -1, 1, 1)),
+            (1, width, 1, 1), (1, width, 1, 1), 'VALID'),
+        (bsize, -1))
+
 class NNetModel:
-    LEARNING_RATE = 1.0
+    LEARNING_RATE = 0.5
     MAX_EPOCHS = 20
-    HIDDEN = 128
+    HIDDEN_1 = 1024
+    HIDDEN_2 = 1024
     BATCH_SIZE = 128
     TRAIN_DIR = "."
-    DECAY_SCALE = 0.95
+    DECAY_SCALE = 0.98
 
     N_WINDOWS = 6
     N_BASE_FEATURES = 3
@@ -59,25 +71,16 @@ class NNetModel:
         X = self._make_features(X)
         y = np.zeros([len(X), 2], dtype='float32')
         #
-        sess, logits, predictions, features_placeholder, labels_placeholder = self.info
         X1 = self.complete_batch(X)
-        ds = self.DataSet(X1,
-                        self.complete_batch(y[:,0]) # This is kludgy to pass y in,
-                                          # there is likely a way to pass
-                                          # in only the feature vector and
-                                          # not both
-                        )
+        ds = self.DataSet(X1,None)
         chunks = []
         steps = len(X1) // self.BATCH_SIZE
         assert len(X1) % self.BATCH_SIZE == 0
         for step in range(steps):
-            feed_dict = self.fill_feed_dict(ds,
-                                       features_placeholder,
-                                       labels_placeholder)
+            feed_dict = self.fill_test_dict(ds)
 
-            chunks.append(sess.run(predictions, feed_dict=feed_dict))
+            chunks.append(self.sess.run(self.predictions, feed_dict=feed_dict))
         ps = np.concatenate(chunks)
-
         #
         y[:,1] = ps.reshape(-1)[:len(X)]
         y[:,0] = 1 - y[:,1]
@@ -98,12 +101,9 @@ class NNetModel:
         #
         train_ds = self.DataSet(X[inds[:n_train]], y[inds[:n_train]])
         eval_ds = self.DataSet(X[inds[n_train:]], y[inds[n_train:]])
-        self.info = self.run_training(train_ds, eval_ds)
+        self.run_training(train_ds, eval_ds)
 
         return self
-
-    def leaky_relu(self, x, alpha=0.01):
-        return tf.maximum(alpha*x,x)
 
     def placeholder_inputs(self, batch_size):
       """Generate placeholder variables to represent the input tensors.
@@ -117,13 +117,13 @@ class NNetModel:
       """
       # Note that the shapes of the placeholders match the shapes of the full
       # image and label tensors, except the first dimension is now batch_size
-      self.features_placeholder = tf.placeholder(tf.float32, shape=(batch_size,
+      features_placeholder = tf.placeholder(tf.float32, shape=(batch_size,
                                                                self.N_FEATURES))
-      self.labels_placeholder = tf.placeholder(tf.float32, shape=(batch_size))
+      labels_placeholder = tf.placeholder(tf.float32, shape=(batch_size))
       return features_placeholder, labels_placeholder
 
 
-    def fill_feed_dict(self, data_set, features_pl, labels_pl):
+    def fill_train_dict(self, data_set):
       """Fills the feed_dict for training the given step.
       A feed_dict takes the form of:
       feed_dict = {
@@ -132,8 +132,6 @@ class NNetModel:
       }
       Args:
         data_set: The set of features and labels, from input_data.read_data_sets()
-        features_pl: The features placeholder, from self.placeholder_inputs().
-        labels_pl: The labels placeholder, from self.placeholder_inputs().
       Returns:
         feed_dict: The feed dictionary mapping from placeholders to values.
       """
@@ -141,8 +139,28 @@ class NNetModel:
       # `batch size ` examples.
       features_feed, labels_feed = data_set.next_batch(self.BATCH_SIZE)
       feed_dict = {
-          features_pl: features_feed,
-          labels_pl: labels_feed,
+          self.features_placeholder: features_feed,
+          self.labels_placeholder: labels_feed,
+      }
+      return feed_dict
+
+    def fill_test_dict(self, data_set):
+      """Fills the feed_dict for training the given step.
+      A feed_dict takes the form of:
+      feed_dict = {
+          <placeholder>: <tensor of values to be passed for placeholder>,
+          ....
+      }
+      Args:
+        data_set: The set of features and labels, from input_data.read_data_sets()
+      Returns:
+        feed_dict: The feed dictionary mapping from placeholders to values.
+      """
+      # Create the feed_dict for the placeholders filled with the next
+      # `batch size ` examples.
+      features_feed, labels_feed = data_set.next_batch(self.BATCH_SIZE)
+      feed_dict = {
+          self.features_placeholder: features_feed,
       }
       return feed_dict
 
@@ -151,7 +169,8 @@ class NNetModel:
                 eval_correct,
                 features_placeholder,
                 labels_placeholder,
-                data_set):
+                data_set,
+                name):
       """Runs one evaluation against the full epoch of data.
       Args:
         sess: The session in which the model has been trained.
@@ -166,20 +185,17 @@ class NNetModel:
       steps_per_epoch = data_set.num_examples // self.BATCH_SIZE
       num_examples = steps_per_epoch * self.BATCH_SIZE
       for step in range(steps_per_epoch):
-        feed_dict = self.fill_feed_dict(data_set,
-                                   features_placeholder,
-                                   labels_placeholder)
+        feed_dict = self.fill_train_dict(data_set)
         true_count += sess.run(eval_correct, feed_dict=feed_dict)
       precision = true_count / num_examples
-      print('  Num examples: %d  Num correct: %d  Precision @ 1: %0.04f' %
-            (num_examples, true_count, precision))
+      print(name, ' %d / %d = %0.04f' %
+            (true_count, num_examples, precision))
 
-    def inference(self, features, hidden_units):
+    def inference(self, features):
         """Build the model up to where it may be used for inference.
         Args:
         features: features placeholder, from inputs().
         hidden_units: Size of the hidden layers.
-    #     maxout_pooling: Degree of maxout to use
         Returns:
         softmax_linear: Output tensor with the computed logits.
         """
@@ -189,30 +205,30 @@ class NNetModel:
         # Hidden 1
         with tf.name_scope('hidden1'):
             weights = tf.Variable(
-                tf.truncated_normal([self.N_FEATURES, hidden_units],
+                tf.truncated_normal([self.N_FEATURES, self.HIDDEN_1],
                                     stddev=1.0 / np.sqrt(self.N_FEATURES)),
                 name='weights')
-            biases = tf.Variable(tf.zeros([hidden_units]),
+            biases = tf.Variable(tf.zeros([self.HIDDEN_1]),
                                  name='biases')
-            hidden1 = self.leaky_relu(tf.matmul(features, weights) + biases)
+            hidden1 = leaky_relu(tf.matmul(features, weights) + biases)
         # Dropout 1
-        dropout1 = tf.nn.dropout(hidden1, 0.5)
+        dropout1 = tf.nn.dropout(hidden1, 0.6)
         # Hidden 2
         with tf.name_scope('hidden2'):
             weights = tf.Variable(
-                tf.truncated_normal([hidden_units, hidden_units],
-                                    stddev=1.0 / np.sqrt(hidden_units)),
+                tf.truncated_normal([self.HIDDEN_1, self.HIDDEN_2],
+                                    stddev=1.0 / np.sqrt(self.HIDDEN_1)),
                 name='weights')
-            biases = tf.Variable(tf.zeros([hidden_units]),
+            biases = tf.Variable(tf.zeros([self.HIDDEN_2]),
                                  name='biases')
-            hidden2 = self.leaky_relu((tf.matmul(dropout1, weights) + biases))
+            hidden2 = leaky_relu((tf.matmul(dropout1, weights) + biases))
         # Dropout2
-        dropout2 = tf.nn.dropout(hidden2, 0.5)
+        dropout2 = tf.nn.dropout(hidden2, 0.6)
         # Linear
         with tf.name_scope('logit'):
             weights = tf.Variable(
-                tf.truncated_normal([hidden_units, 1],
-                                    stddev=1.0 / np.sqrt(hidden_units)),
+                tf.truncated_normal([self.HIDDEN_2, 1],
+                                    stddev=1.0 / np.sqrt(self.HIDDEN_2)),
                 name='weights')
             biases = tf.Variable(tf.zeros([1]),
                                  name='biases')
@@ -287,7 +303,7 @@ class NNetModel:
             """
             dtype = 'float32'
 
-            assert features.shape[0] == labels.shape[0], (
+            assert labels is None or features.shape[0] == labels.shape[0], (
               'features.shape: %s labels.shape: %s' % (features.shape, labels.shape))
             self._num_examples = features.shape[0]
             self._features = features
@@ -322,13 +338,14 @@ class NNetModel:
               perm = np.arange(self._num_examples)
               np.random.shuffle(perm)
               self._features = self._features[perm]
-              self._labels = self._labels[perm]
+              self._labels = None if (self._labels is None) else self._labels[perm]
               # Start next epoch
               start = 0
               self._index_in_epoch = batch_size
               assert batch_size <= self._num_examples
             end = self._index_in_epoch
-            return self._features[start:end], self._labels[start:end]
+            return (self._features[start:end],
+                    None if (self._labels is None) else self._labels[start:end])
 
 
 
@@ -344,17 +361,17 @@ class NNetModel:
       # Tell TensorFlow that the model will be built into the default Graph.
       with tf.Graph().as_default():
         # Generate placeholders for the features and labels.
-        features_placeholder, labels_placeholder = self.placeholder_inputs(
+        self.features_placeholder, self.labels_placeholder = self.placeholder_inputs(
             self.BATCH_SIZE)
 
         # Build a Graph that computes predictions from the inference model.
-        logits = self.inference(features_placeholder, self.HIDDEN)
+        logits = self.inference(self.features_placeholder)
 
         # Build a final output prediction
         predictions = tf.nn.sigmoid(logits)
 
         # Add to the Graph the Ops for loss calculation.
-        loss = self.lossfunc(logits, labels_placeholder)
+        loss = self.lossfunc(logits, self.labels_placeholder)
 
         # Add to the Graph the Ops that calculate and apply gradients.
         learning_rate = tf.Variable(self.LEARNING_RATE, name="learning_rate")
@@ -362,7 +379,7 @@ class NNetModel:
         train_op = self.training(loss, learning_rate)
 
         # Add the Op to compare the logits to the labels during evaluation.
-        eval_correct = self.evaluation(logits, labels_placeholder)
+        eval_correct = self.evaluation(logits, self.labels_placeholder)
 
         # Build the summary operation based on the TF collection of Summaries.
         summary_op = tf.merge_all_summaries()
@@ -394,9 +411,7 @@ class NNetModel:
 
               # Fill a feed dictionary with the actual set of features and labels
               # for this particular training step.
-              feed_dict = self.fill_feed_dict(train_ds,
-                                              features_placeholder,
-                                              labels_placeholder)
+              feed_dict = self.fill_train_dict(train_ds)
 
               # Run one step of the model.  The return values are the activations
               # from the `train_op` (which is discarded) and the `loss` Op.  To
@@ -425,25 +440,25 @@ class NNetModel:
                 saver.save(sess, self.TRAIN_DIR, global_step=step)
                 # Evaluate against the training set.
                 print("Epoch:", epoch)
-                print('Training Data Eval:')
-                do_eval(sess,
+                self.do_eval(sess,
                         eval_correct,
-                        features_placeholder,
-                        labels_placeholder,
-                        train_ds)
+                        self.features_placeholder,
+                        self.labels_placeholder,
+                        train_ds, "Training:")
                 # Evaluate against the validation set.
-                print('Validation Data Eval:')
-                do_eval(sess,
+                self.do_eval(sess,
                         eval_correct,
-                        features_placeholder,
-                        labels_placeholder,
-                        eval_ds)
+                        self.features_placeholder,
+                        self.labels_placeholder,
+                        eval_ds, "Validation:")
               last_epoch = epoch
               step += 1
-          except:
+          except KeyboardInterrupt:
               break
 
-        return sess, logits, predictions, features_placeholder, labels_placeholder
+        self.sess = sess
+        self.logits = logits
+        self.predictions = predictions
 
 
 

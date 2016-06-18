@@ -5,7 +5,7 @@ from lasagne.layers import (InputLayer, DenseLayer, Conv1DLayer,
                             NonlinearityLayer,NINLayer, FeaturePoolLayer,
                             GlobalPoolLayer, ParametricRectifierLayer,
                             GaussianNoiseLayer)
-from lasagne.nonlinearities import rectify, softmax, sigmoid
+from lasagne.nonlinearities import leaky_rectify, softmax, sigmoid
 from lasagne import utils, init
 from theano import tensor as T
 import theano
