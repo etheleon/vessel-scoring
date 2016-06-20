@@ -63,7 +63,8 @@ def _subsample_even(x0, mmsi, n):
     f = fishy(x)
     nf = nonfishy(x)
     if n//2 > len(f) or n//2 > len(nf):
-        print("Warning, inufficient items to sample, returning fewer")
+        print("Warning, inufficient items to sample, returning fewer",
+              file=sys.stderr)
     f = np.random.choice(f, min(n//2, len(f)), replace=False)
     nf = np.random.choice(nf, min(n//2, len(nf)), replace=False)
     ss = np.concatenate([f, nf])
@@ -87,7 +88,8 @@ def _subsample_proportional(x0, mmsi, n):
     # Pick values randomly
     # Pick values randomly
     if n > len(x):
-        print("Warning, inufficient items to sample, returning", len(x))
+        print("Warning, inufficient items to sample, returning", len(x),
+               file=sys.stderr)
         n = len(x)
     ss = np.random.choice(x, n, replace=False)
     np.random.shuffle(ss)
@@ -174,7 +176,7 @@ def load_dataset_by_vessel(path, size = 20000, even_split=None, seed=4321):
         xcross = _subsample_proportional(x, mmsi[n1:n2], size//4)
         xtest = _subsample_proportional(x, mmsi[n2:], size//4)
     except Exception as e:
-        print("Broken data in", path)
+        print("Warning: broken data in", path, file=sys.stderr)
         import pdb, sys
         sys.last_traceback = sys.exc_info()[2]
         pdb.set_trace()
