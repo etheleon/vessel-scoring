@@ -59,23 +59,20 @@ class NNetModel:
         X = self._make_features(X)
         y = np.zeros([len(X), 2], dtype='float32')
         #
-        sess, logits, predictions, features_placeholder, labels_placeholder = self.info
         X1 = self.complete_batch(X)
         ds = self.DataSet(X1,
-                        self.complete_batch(y[:,0]) # This is kludgy to pass y in,
+                        self.complete_batch(y[:,0]), # This is kludgy to pass y in,
                                           # there is likely a way to pass
                                           # in only the feature vector and
                                           # not both
-                        )
+                        self.BATCH_SIZE)
         chunks = []
         steps = len(X1) // self.BATCH_SIZE
         assert len(X1) % self.BATCH_SIZE == 0
         for step in range(steps):
-            feed_dict = self.fill_feed_dict(ds,
-                                       features_placeholder,
-                                       labels_placeholder)
+            feed_dict = self.fill_feed_dict(ds)
 
-            chunks.append(sess.run(predictions, feed_dict=feed_dict))
+            chunks.append(self.sess.run(self.predictions, feed_dict=feed_dict))
         ps = np.concatenate(chunks)
 
         #
@@ -96,34 +93,16 @@ class NNetModel:
         inds = np.arange(n)
         np.random.shuffle(inds)
         #
-        train_ds = self.DataSet(X[inds[:n_train]], y[inds[:n_train]])
-        eval_ds = self.DataSet(X[inds[n_train:]], y[inds[n_train:]])
-        self.info = self.run_training(train_ds, eval_ds)
+        train_ds = self.DataSet(X[inds[:n_train]], y[inds[:n_train]], self.BATCH_SIZE)
+        eval_ds = self.DataSet(X[inds[n_train:]], y[inds[n_train:]], self.BATCH_SIZE)
+        self.run_training(train_ds, eval_ds)
 
         return self
 
     def leaky_relu(self, x, alpha=0.01):
         return tf.maximum(alpha*x,x)
 
-    def placeholder_inputs(self, batch_size):
-      """Generate placeholder variables to represent the input tensors.
-      These placeholders are used as inputs by the rest of the model building
-      code and will be fed from the downloaded data in the .run() loop, below.
-      Args:
-        batch_size: The batch size will be baked into both placeholders.
-      Returns:
-        featurse_placeholder: Features placeholder.
-        labels_placeholder: Labels placeholder.
-      """
-      # Note that the shapes of the placeholders match the shapes of the full
-      # image and label tensors, except the first dimension is now batch_size
-      self.features_placeholder = tf.placeholder(tf.float32, shape=(batch_size,
-                                                               self.N_FEATURES))
-      self.labels_placeholder = tf.placeholder(tf.float32, shape=(batch_size))
-      return features_placeholder, labels_placeholder
-
-
-    def fill_feed_dict(self, data_set, features_pl, labels_pl):
+    def fill_feed_dict(self, data_set):
       """Fills the feed_dict for training the given step.
       A feed_dict takes the form of:
       feed_dict = {
@@ -132,32 +111,23 @@ class NNetModel:
       }
       Args:
         data_set: The set of features and labels, from input_data.read_data_sets()
-        features_pl: The features placeholder, from self.placeholder_inputs().
-        labels_pl: The labels placeholder, from self.placeholder_inputs().
       Returns:
         feed_dict: The feed dictionary mapping from placeholders to values.
       """
       # Create the feed_dict for the placeholders filled with the next
       # `batch size ` examples.
-      features_feed, labels_feed = data_set.next_batch(self.BATCH_SIZE)
+      features_feed, labels_feed = data_set.next_batch()
       feed_dict = {
-          features_pl: features_feed,
-          labels_pl: labels_feed,
+          self.features_placeholder: features_feed,
+          self.labels_placeholder: labels_feed,
       }
       return feed_dict
 
 
-    def do_eval(self, sess,
-                eval_correct,
-                features_placeholder,
-                labels_placeholder,
-                data_set):
+    def do_eval(self, eval_correct, data_set):
       """Runs one evaluation against the full epoch of data.
       Args:
-        sess: The session in which the model has been trained.
         eval_correct: The Tensor that returns the number of correct predictions.
-        features_placeholder: The features placeholder.
-        labels_placeholder: The labels placeholder.
         data_set: The set of features and labels to evaluate, from
           input_data.read_data_sets().
       """
@@ -166,10 +136,8 @@ class NNetModel:
       steps_per_epoch = data_set.num_examples // self.BATCH_SIZE
       num_examples = steps_per_epoch * self.BATCH_SIZE
       for step in range(steps_per_epoch):
-        feed_dict = self.fill_feed_dict(data_set,
-                                   features_placeholder,
-                                   labels_placeholder)
-        true_count += sess.run(eval_correct, feed_dict=feed_dict)
+        feed_dict = self.fill_feed_dict(data_set)
+        true_count += self.sess.run(eval_correct, feed_dict=feed_dict)
       precision = true_count / num_examples
       print('  Num examples: %d  Num correct: %d  Precision @ 1: %0.04f' %
             (num_examples, true_count, precision))
@@ -185,7 +153,6 @@ class NNetModel:
         """
 
 
-        batch_size = tf.shape(features)[0]
         # Hidden 1
         with tf.name_scope('hidden1'):
             weights = tf.Variable(
@@ -224,8 +191,8 @@ class NNetModel:
     def lossfunc(self, logits, labels):
       """Calculates the loss from the logits and the labels.
       Args:
-        logits: Logits tensor, float - [batch_size, NUM_CLASSES].
-        labels: Labels tensor, int32 - [batch_size].
+        logits: Logits tensor, float - [BATCH_SIZE, NUM_CLASSES].
+        labels: Labels tensor, int32 - [BATCH_SIZE].
       Returns:
         loss: Loss tensor of type float.
       """
@@ -240,7 +207,7 @@ class NNetModel:
       Creates a summarizer to track the loss over time in TensorBoard.
       Creates an optimizer and applies the gradients to all trainable variables.
       The Op returned by this function is what must be passed to the
-      `sess.run()` call to cause the model to train.
+      `self.sess.run()` call to cause the model to train.
       Args:
         loss: Loss tensor, from loss().
         learning_rate: The learning rate to use for gradient descent.
@@ -262,14 +229,14 @@ class NNetModel:
     def evaluation(self, logits, labels):
       """Evaluate the quality of the logits at predicting the label.
       Args:
-        logits: Logits tensor, float - [batch_size].
-        labels: Labels tensor, float - [batch_size]
+        logits: Logits tensor, float - [BATCH_SIZE].
+        labels: Labels tensor, float - [BATCH_SIZE]
       Returns:
-        A scalar int32 tensor with the number of examples (out of batch_size)
+        A scalar int32 tensor with the number of examples (out of BATCH_SIZE)
         that were predicted correctly.
       """
       # For a classifier model, we can use the in_top_k Op.
-      # It returns a bool tensor with shape [batch_size] that is true for
+      # It returns a bool tensor with shape [BATCH_SIZE] that is true for
       # the examples where the label is in the top k (here k=1)
       # of all logits for that example.
       correct = tf.equal(tf.round(tf.sigmoid(logits)), labels)
@@ -282,7 +249,8 @@ class NNetModel:
 
         def __init__(self,
                      features,
-                     labels):
+                     labels,
+                     BATCH_SIZE):
             """Construct a DataSet.
             """
             dtype = 'float32'
@@ -294,6 +262,7 @@ class NNetModel:
             self._labels = labels
             self._epochs_completed = 0
             self._index_in_epoch = 0
+            self.BATCH_SIZE = BATCH_SIZE
 
         @property
         def features(self):
@@ -311,10 +280,10 @@ class NNetModel:
         def epochs_completed(self):
             return self._epochs_completed
 
-        def next_batch(self, batch_size, fake_data=False):
-            """Return the next `batch_size` examples from this data set."""
+        def next_batch(self, fake_data=False):
+            """Return the next `BATCH_SIZE` examples from this data set."""
             start = self._index_in_epoch
-            self._index_in_epoch += batch_size
+            self._index_in_epoch += self.BATCH_SIZE
             if self._index_in_epoch > self._num_examples:
               # Finished epoch
               self._epochs_completed += 1
@@ -325,8 +294,8 @@ class NNetModel:
               self._labels = self._labels[perm]
               # Start next epoch
               start = 0
-              self._index_in_epoch = batch_size
-              assert batch_size <= self._num_examples
+              self._index_in_epoch = self.BATCH_SIZE
+              assert self.BATCH_SIZE <= self._num_examples
             end = self._index_in_epoch
             return self._features[start:end], self._labels[start:end]
 
@@ -343,26 +312,27 @@ class NNetModel:
 
       # Tell TensorFlow that the model will be built into the default Graph.
       with tf.Graph().as_default():
-        # Generate placeholders for the features and labels.
-        features_placeholder, labels_placeholder = self.placeholder_inputs(
-            self.BATCH_SIZE)
+        # Note that the shapes of the placeholders match the shapes of the full
+        # image and label tensors, except the first dimension is now BATCH_SIZE
+        self.features_placeholder = tf.placeholder(tf.float32, shape=(self.BATCH_SIZE, self.N_FEATURES))
+        self.labels_placeholder = tf.placeholder(tf.float32, shape=(self.BATCH_SIZE))
 
-        # Build a Graph that computes predictions from the inference model.
-        logits = self.inference(features_placeholder, self.HIDDEN)
+        # Build a Graph that computes self.predictions from the inference model.
+        self.logits = self.inference(self.features_placeholder, self.HIDDEN)
 
         # Build a final output prediction
-        predictions = tf.nn.sigmoid(logits)
+        self.predictions = tf.nn.sigmoid(self.logits)
 
         # Add to the Graph the Ops for loss calculation.
-        loss = self.lossfunc(logits, labels_placeholder)
+        loss = self.lossfunc(self.logits, self.labels_placeholder)
 
         # Add to the Graph the Ops that calculate and apply gradients.
         learning_rate = tf.Variable(self.LEARNING_RATE, name="learning_rate")
         #
         train_op = self.training(loss, learning_rate)
 
-        # Add the Op to compare the logits to the labels during evaluation.
-        eval_correct = self.evaluation(logits, labels_placeholder)
+        # Add the Op to compare the self.logits to the labels during evaluation.
+        eval_correct = self.evaluation(self.logits, self.labels_placeholder)
 
         # Build the summary operation based on the TF collection of Summaries.
         summary_op = tf.merge_all_summaries()
@@ -374,15 +344,15 @@ class NNetModel:
         saver = tf.train.Saver()
 
         # Create a session for running Ops on the Graph.
-        sess = tf.Session()
+        self.sess = tf.Session()
 
         # Instantiate a SummaryWriter to output summaries and the Graph.
-        summary_writer = tf.train.SummaryWriter(self.TRAIN_DIR, sess.graph)
+        summary_writer = tf.train.SummaryWriter(self.TRAIN_DIR, self.sess.graph)
 
         # And then after everything is built:
 
         # Run the Op to initialize the variables.
-        sess.run(init)
+        self.sess.run(init)
 
         # Start the training loop.
         epoch = 0
@@ -394,16 +364,14 @@ class NNetModel:
 
               # Fill a feed dictionary with the actual set of features and labels
               # for this particular training step.
-              feed_dict = self.fill_feed_dict(train_ds,
-                                              features_placeholder,
-                                              labels_placeholder)
+              feed_dict = self.fill_feed_dict(train_ds)
 
               # Run one step of the model.  The return values are the activations
               # from the `train_op` (which is discarded) and the `loss` Op.  To
               # inspect the values of your Ops or variables, you may include them
-              # in the list passed to sess.run() and the value tensors will be
+              # in the list passed to self.sess.run() and the value tensors will be
               # returned in the tuple from the call.
-              _, loss_value = sess.run([train_op, loss],
+              _, loss_value = self.sess.run([train_op, loss],
                                        feed_dict=feed_dict)
 
               duration = time.time() - start_time
@@ -413,7 +381,7 @@ class NNetModel:
                 # Print status to stdout.
                 print('Step %d: loss = %.2f (%.3f sec)' % (step, loss_value, duration))
                 # Update the events file.
-                summary_str = sess.run(summary_op, feed_dict=feed_dict)
+                summary_str = self.sess.run(summary_op, feed_dict=feed_dict)
                 summary_writer.add_summary(summary_str, step)
                 summary_writer.flush()
 
@@ -422,29 +390,20 @@ class NNetModel:
               if epoch != last_epoch or epoch >= self.MAX_EPOCHS:
                 learning_rate.assign(0.95 * learning_rate)
                 # Save a checkpoint and evaluate the model .
-                saver.save(sess, self.TRAIN_DIR, global_step=step)
+                saver.save(self.sess, self.TRAIN_DIR, global_step=step)
                 # Evaluate against the training set.
                 print("Epoch:", epoch)
                 print('Training Data Eval:')
-                do_eval(sess,
-                        eval_correct,
-                        features_placeholder,
-                        labels_placeholder,
-                        train_ds)
+                self.do_eval(eval_correct,
+                             train_ds)
                 # Evaluate against the validation set.
                 print('Validation Data Eval:')
-                do_eval(sess,
-                        eval_correct,
-                        features_placeholder,
-                        labels_placeholder,
-                        eval_ds)
+                self.do_eval(eval_correct,
+                             eval_ds)
               last_epoch = epoch
               step += 1
           except:
               break
-
-        return sess, logits, predictions, features_placeholder, labels_placeholder
-
 
 
     def complete_batch(self, x):
