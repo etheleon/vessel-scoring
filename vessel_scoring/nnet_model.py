@@ -106,64 +106,64 @@ class NNetModel:
         return self
 
     def fill_train_dict(self, data_set):
-      """Fills the feed_dict for training the given step.
-      A feed_dict takes the form of:
-      feed_dict = {
-          <placeholder>: <tensor of values to be passed for placeholder>,
-          ....
-      }
-      Args:
-        data_set: The set of features and labels, from input_data.read_data_sets()
-      Returns:
-        feed_dict: The feed dictionary mapping from placeholders to values.
-      """
-      # Create the feed_dict for the placeholders filled with the next
-      # `batch size ` examples.
-      features_feed, labels_feed = data_set.next_batch()
-      feed_dict = {
-          self.features_placeholder: features_feed,
-          self.labels_placeholder: labels_feed,
-      }
-      return feed_dict
-
+        """Fills the feed_dict for training the given step.
+        A feed_dict takes the form of:
+        feed_dict = {
+            <placeholder>: <tensor of values to be passed for placeholder>,
+            ....
+        }
+        Args:
+            data_set: The set of features and labels, from input_data.read_data_sets()
+        Returns:
+            feed_dict: The feed dictionary mapping from placeholders to values.
+        """
+        # Create the feed_dict for the placeholders filled with the next
+        # `batch size ` examples.
+        features_feed, labels_feed = data_set.next_batch()
+        feed_dict = {
+            self.features_placeholder: features_feed,
+            self.labels_placeholder: labels_feed,
+            }
+        return feed_dict
+    
     def fill_test_dict(self, data_set):
-      """Fills the feed_dict for training the given step.
-      A feed_dict takes the form of:
-      feed_dict = {
-          <placeholder>: <tensor of values to be passed for placeholder>,
-          ....
-      }
-      Args:
-        data_set: The set of features and labels, from input_data.read_data_sets()
-      Returns:
-        feed_dict: The feed dictionary mapping from placeholders to values.
-      """
-      # Create the feed_dict for the placeholders filled with the next
-      # `batch size ` examples.
-      features_feed, labels_feed = data_set.next_batch()
-      feed_dict = {
-          self.features_placeholder: features_feed,
-      }
-      return feed_dict
+        """Fills the feed_dict for training the given step.
+        A feed_dict takes the form of:
+        feed_dict = {
+            <placeholder>: <tensor of values to be passed for placeholder>,
+            ....
+        }
+        Args:
+            data_set: The set of features and labels, from input_data.read_data_sets()
+        Returns:
+            feed_dict: The feed dictionary mapping from placeholders to values.
+        """
+        # Create the feed_dict for the placeholders filled with the next
+        # `batch size ` examples.
+        features_feed, labels_feed = data_set.next_batch()
+        feed_dict = {
+            self.features_placeholder: features_feed,
+        }
+        return feed_dict
 
 
     def do_eval(self, eval_correct, data_set, name):
-      """Runs one evaluation against the full epoch of data.
-      Args:
-        eval_correct: The Tensor that returns the number of correct predictions.
-        data_set: The set of features and labels to evaluate, from
-          input_data.read_data_sets().
-      """
-      # And run one epoch of eval.
-      true_count = 0  # Counts the number of correct predictions.
-      steps_per_epoch = data_set.num_examples // self.BATCH_SIZE
-      num_examples = steps_per_epoch * self.BATCH_SIZE
-      for step in range(steps_per_epoch):
-        feed_dict = self.fill_train_dict(data_set)
-        true_count += self.sess.run(eval_correct, feed_dict=feed_dict)
-      precision = true_count / num_examples
-      print(name, ' %d / %d = %0.04f' %
-            (true_count, num_examples, precision))
+        """Runs one evaluation against the full epoch of data.
+        Args:
+            eval_correct: The Tensor that returns the number of correct predictions.
+            data_set: The set of features and labels to evaluate, from
+                input_data.read_data_sets().
+        """
+        # And run one epoch of eval.
+        true_count = 0  # Counts the number of correct predictions.
+        steps_per_epoch = data_set.num_examples // self.BATCH_SIZE
+        num_examples = steps_per_epoch * self.BATCH_SIZE
+        for step in range(steps_per_epoch):
+            feed_dict = self.fill_train_dict(data_set)
+            true_count += self.sess.run(eval_correct, feed_dict=feed_dict)
+        precision = true_count / num_examples
+        print(name, ' %d / %d = %0.04f' %
+              (true_count, num_examples, precision))
 
     def inference(self, features):
         """Build the model up to where it may be used for inference.
@@ -211,59 +211,59 @@ class NNetModel:
 
 
     def lossfunc(self, logits, labels):
-      """Calculates the loss from the logits and the labels.
-      Args:
-        logits: Logits tensor, float - [BATCH_SIZE, NUM_CLASSES].
-        labels: Labels tensor, int32 - [BATCH_SIZE].
-      Returns:
-        loss: Loss tensor of type float.
-      """
-      cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
-          logits, labels, name='xentropy')
-      loss = tf.reduce_mean(cross_entropy, name='xentropy_mean')
-      return loss
+        """Calculates the loss from the logits and the labels.
+        Args:
+            logits: Logits tensor, float - [BATCH_SIZE, NUM_CLASSES].
+            labels: Labels tensor, int32 - [BATCH_SIZE].
+        Returns:
+            loss: Loss tensor of type float.
+        """
+        cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
+            logits, labels, name='xentropy')
+        loss = tf.reduce_mean(cross_entropy, name='xentropy_mean')
+        return loss
 
 
     def training(self, loss, learning_rate):
-      """Sets up the training Ops.
-      Creates a summarizer to track the loss over time in TensorBoard.
-      Creates an optimizer and applies the gradients to all trainable variables.
-      The Op returned by this function is what must be passed to the
-      `self.sess.run()` call to cause the model to train.
-      Args:
-        loss: Loss tensor, from loss().
-        learning_rate: The learning rate to use for gradient descent.
-      Returns:
-        train_op: The Op for training.
-      """
-      # Add a scalar summary for the snapshot loss.
-      tf.scalar_summary(loss.op.name, loss)
-      # Create the gradient descent optimizer with the given learning rate.
-      optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-      # Create a variable to track the global step.
-      global_step = tf.Variable(0, name='global_step', trainable=False)
-      # Use the optimizer to apply the gradients that minimize the loss
-      # (and also increment the global step counter) as a single training step.
-      train_op = optimizer.minimize(loss, global_step=global_step)
-      return train_op
+        """Sets up the training Ops.
+        Creates a summarizer to track the loss over time in TensorBoard.
+        Creates an optimizer and applies the gradients to all trainable variables.
+        The Op returned by this function is what must be passed to the
+        `self.sess.run()` call to cause the model to train.
+        Args:
+            loss: Loss tensor, from loss().
+            learning_rate: The learning rate to use for gradient descent.
+        Returns:
+            train_op: The Op for training.
+        """
+        # Add a scalar summary for the snapshot loss.
+        tf.scalar_summary(loss.op.name, loss)
+        # Create the gradient descent optimizer with the given learning rate.
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        # Create a variable to track the global step.
+        global_step = tf.Variable(0, name='global_step', trainable=False)
+        # Use the optimizer to apply the gradients that minimize the loss
+        # (and also increment the global step counter) as a single training step.
+        train_op = optimizer.minimize(loss, global_step=global_step)
+        return train_op
 
 
     def evaluation(self, logits, labels):
-      """Evaluate the quality of the logits at predicting the label.
-      Args:
-        logits: Logits tensor, float - [BATCH_SIZE].
-        labels: Labels tensor, float - [BATCH_SIZE]
-      Returns:
-        A scalar int32 tensor with the number of examples (out of BATCH_SIZE)
-        that were predicted correctly.
-      """
-      # For a classifier model, we can use the in_top_k Op.
-      # It returns a bool tensor with shape [BATCH_SIZE] that is true for
-      # the examples where the label is in the top k (here k=1)
-      # of all logits for that example.
-      correct = tf.equal(tf.round(tf.sigmoid(logits)), labels)
-      # Return the number of true entries.
-      return tf.reduce_sum(tf.cast(correct, tf.int32))
+        """Evaluate the quality of the logits at predicting the label.
+        Args:
+            logits: Logits tensor, float - [BATCH_SIZE].
+            labels: Labels tensor, float - [BATCH_SIZE]
+        Returns:
+            A scalar int32 tensor with the number of examples (out of BATCH_SIZE)
+            that were predicted correctly.
+        """
+        # For a classifier model, we can use the in_top_k Op.
+        # It returns a bool tensor with shape [BATCH_SIZE] that is true for
+        # the examples where the label is in the top k (here k=1)
+        # of all logits for that example.
+        correct = tf.equal(tf.round(tf.sigmoid(logits)), labels)
+        # Return the number of true entries.
+        return tf.reduce_sum(tf.cast(correct, tf.int32))
 
 
 
@@ -307,17 +307,17 @@ class NNetModel:
             start = self._index_in_epoch
             self._index_in_epoch += self.BATCH_SIZE
             if self._index_in_epoch > self._num_examples:
-              # Finished epoch
-              self._epochs_completed += 1
-              # Shuffle the data
-              perm = np.arange(self._num_examples)
-              np.random.shuffle(perm)
-              self._features = self._features[perm]
-              self._labels = None if (self._labels is None) else self._labels[perm]
-              # Start next epoch
-              start = 0
-              self._index_in_epoch = self.BATCH_SIZE
-              assert self.BATCH_SIZE <= self._num_examples
+                # Finished epoch
+                self._epochs_completed += 1
+                # Shuffle the data
+                perm = np.arange(self._num_examples)
+                np.random.shuffle(perm)
+                self._features = self._features[perm]
+                self._labels = None if (self._labels is None) else self._labels[perm]
+                # Start next epoch
+                start = 0
+                self._index_in_epoch = self.BATCH_SIZE
+                assert self.BATCH_SIZE <= self._num_examples
             end = self._index_in_epoch
             return (self._features[start:end],
                     None if (self._labels is None) else self._labels[start:end])
@@ -325,103 +325,103 @@ class NNetModel:
 
 
     def run_training(self, train_ds, eval_ds):
-      """Train for a number of steps."""
-      # Get the sets of features and labels for training, validation, and
-      # test on .
-    #   data_sets = input_data.read_data_sets(FLAGS.train_dir, FLAGS.fake_data)
+        """Train for a number of steps."""
+        # Get the sets of features and labels for training, validation, and
+        # test on .
+        #   data_sets = input_data.read_data_sets(FLAGS.train_dir, FLAGS.fake_data)
 
-      # Tell TensorFlow that the model will be built into the default Graph.
-      with tf.Graph().as_default():
-        # Note that the shapes of the placeholders match the shapes of the full
-        # image and label tensors, except the first dimension is now BATCH_SIZE
-        self.features_placeholder = tf.placeholder(tf.float32, shape=(self.BATCH_SIZE, self.N_FEATURES))
-        self.labels_placeholder = tf.placeholder(tf.float32, shape=(self.BATCH_SIZE))
+        # Tell TensorFlow that the model will be built into the default Graph.
+        with tf.Graph().as_default():
+            # Note that the shapes of the placeholders match the shapes of the full
+            # image and label tensors, except the first dimension is now BATCH_SIZE
+            self.features_placeholder = tf.placeholder(tf.float32, shape=(self.BATCH_SIZE, self.N_FEATURES))
+            self.labels_placeholder = tf.placeholder(tf.float32, shape=(self.BATCH_SIZE))
 
-        # Build a Graph that computes predictions from the inference model.
-        self.logits = self.inference(self.features_placeholder)
+            # Build a Graph that computes predictions from the inference model.
+            self.logits = self.inference(self.features_placeholder)
 
-        # Build a final output prediction
-        self.predictions = tf.nn.sigmoid(self.logits)
+            # Build a final output prediction
+            self.predictions = tf.nn.sigmoid(self.logits)
 
-        # Add to the Graph the Ops for loss calculation.
-        loss = self.lossfunc(self.logits, self.labels_placeholder)
+            # Add to the Graph the Ops for loss calculation.
+            loss = self.lossfunc(self.logits, self.labels_placeholder)
 
-        # Add to the Graph the Ops that calculate and apply gradients.
-        learning_rate = tf.Variable(self.LEARNING_RATE, name="learning_rate")
-        #
-        train_op = self.training(loss, learning_rate)
+            # Add to the Graph the Ops that calculate and apply gradients.
+            learning_rate = tf.Variable(self.LEARNING_RATE, name="learning_rate")
+            #
+            train_op = self.training(loss, learning_rate)
 
-        # Add the Op to compare the logits to the labels during evaluation.
-        eval_correct = self.evaluation(self.logits, self.labels_placeholder)
+            # Add the Op to compare the logits to the labels during evaluation.
+            eval_correct = self.evaluation(self.logits, self.labels_placeholder)
 
-        # Build the summary operation based on the TF collection of Summaries.
-        summary_op = tf.merge_all_summaries()
+            # Build the summary operation based on the TF collection of Summaries.
+            summary_op = tf.merge_all_summaries()
 
-        # Add the variable initializer Op.
-        init = tf.initialize_all_variables()
+            # Add the variable initializer Op.
+            init = tf.initialize_all_variables()
 
-        # Create a saver for writing training checkpoints.
-        saver = tf.train.Saver()
+            # Create a saver for writing training checkpoints.
+            saver = tf.train.Saver()
 
-        # Create a session for running Ops on the Graph.
-        self.sess = tf.Session()
+            # Create a session for running Ops on the Graph.
+            self.sess = tf.Session()
 
-        # Instantiate a SummaryWriter to output summaries and the Graph.
-        summary_writer = tf.train.SummaryWriter(self.TRAIN_DIR, self.sess.graph)
+            # Instantiate a SummaryWriter to output summaries and the Graph.
+            summary_writer = tf.train.SummaryWriter(self.TRAIN_DIR, self.sess.graph)
 
-        # And then after everything is built:
+            # And then after everything is built:
 
-        # Run the Op to initialize the variables.
-        self.sess.run(init)
+            # Run the Op to initialize the variables.
+            self.sess.run(init)
 
-        # Start the training loop.
-        epoch = 0
-        last_epoch = 0
-        step = 0
-        while epoch < self.MAX_EPOCHS:
-          try:
-              start_time = time.time()
+            # Start the training loop.
+            epoch = 0
+            last_epoch = 0
+            step = 0
+            while epoch < self.MAX_EPOCHS:
+                try:
+                    start_time = time.time()
+                    
+                    # Fill a feed dictionary with the actual set of features and labels
+                    # for this particular training step.
+                    feed_dict = self.fill_train_dict(train_ds)
 
-              # Fill a feed dictionary with the actual set of features and labels
-              # for this particular training step.
-              feed_dict = self.fill_train_dict(train_ds)
+                    # Run one step of the model.  The return values are the activations
+                    # from the `train_op` (which is discarded) and the `loss` Op.  To
+                    # inspect the values of your Ops or variables, you may include them
+                    # in the list passed to self.sess.run() and the value tensors will be
+                    # returned in the tuple from the call.
+                    _, loss_value = self.sess.run([train_op, loss],
+                                             feed_dict=feed_dict)
 
-              # Run one step of the model.  The return values are the activations
-              # from the `train_op` (which is discarded) and the `loss` Op.  To
-              # inspect the values of your Ops or variables, you may include them
-              # in the list passed to self.sess.run() and the value tensors will be
-              # returned in the tuple from the call.
-              _, loss_value = self.sess.run([train_op, loss],
-                                       feed_dict=feed_dict)
+                    duration = time.time() - start_time
 
-              duration = time.time() - start_time
-
-              # Write the summaries and print an overview fairly often.
-              if step % 100 == 0:
-                # Print status to stdout.
-                print('Step %d: loss = %.2f (%.3f sec)' % (step, loss_value, duration))
-                # Update the events file.
-                summary_str = self.sess.run(summary_op, feed_dict=feed_dict)
-                summary_writer.add_summary(summary_str, step)
-                summary_writer.flush()
+                    # Write the summaries and print an overview fairly often.
+                    if step % 100 == 0:
+                        # Print status to stdout.
+                        print('Step %d: loss = %.2f (%.3f sec)' % (step, loss_value, duration))
+                        # Update the events file.
+                        summary_str = self.sess.run(summary_op, feed_dict=feed_dict)
+                        summary_writer.add_summary(summary_str, step)
+                        summary_writer.flush()
 
 
-              epoch = (step * self.BATCH_SIZE) // train_ds.num_examples
-              if epoch != last_epoch or epoch >= self.MAX_EPOCHS:
-                learning_rate.assign(0.95 * learning_rate)
-                # Save a checkpoint and evaluate the model .
-                saver.save(self.sess, self.TRAIN_DIR + '/save', global_step=step)
-                # Evaluate against the training set.
-                print("Epoch:", epoch)
-                self.do_eval(eval_correct,
-                             train_ds, "Training:")
-                # Evaluate against the validation set.
-                self.do_eval(eval_correct,
-                             eval_ds, "Validation:")
-              last_epoch = epoch
-              step += 1
-          except KeyboardInterrupt:
-              break
+                    epoch = (step * self.BATCH_SIZE) // train_ds.num_examples
+                    if epoch != last_epoch or epoch >= self.MAX_EPOCHS:
+                        learning_rate.assign(0.95 * learning_rate)
+                        # Save a checkpoint and evaluate the model .
+                        saver.save(self.sess, self.TRAIN_DIR + '/save', global_step=step)
+                        # Evaluate against the training set.
+                        print("Epoch:", epoch)
+                        self.do_eval(eval_correct,
+                                     train_ds, "Training:")
+                        # Evaluate against the validation set.
+                        self.do_eval(eval_correct,
+                                     eval_ds, "Validation:")
+                    last_epoch = epoch
+                    step += 1
+                except KeyboardInterrupt:
+                    break
 
     def complete_batch(self, x):
         n = len(x)
