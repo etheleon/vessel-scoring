@@ -1,48 +1,9 @@
+from __future__ import print_function, division
 import numpy as np
 import numpy.lib.recfunctions
-import os.path
-import math
-import scipy.optimize
-import sys
+import warnings
 from vessel_scoring.utils import *
 
-def load_dataset(path, size = 20000):
-    # Load a dataset and extract a train, cross validation and test dataset
-    #
-    # * We need roughly the same amount of fishing and non-fishing
-    #   rows to get good predictions, but the source data for some
-    #   vessel types contain mostly non-fishing rows, so we randomly
-    #   select 1000 fishing rows and the same number of non-fishing
-    #   rows
-    # * We add the log of the stddev columns, since their values are
-    #   exponentially distributed
-
-    x = np.load(path)['x']
-    x = x[~np.isinf(x['classification']) & ~np.isnan(x['classification']) & ~np.isnan(x['timestamp']) & ~np.isnan(x['speed']) & ~np.isnan(x['course'])]
-
-    all_windows = get_windows(x)
-
-    for window in all_windows:
-        x = np.lib.recfunctions.append_fields(x, 'measure_speedstddev_%s_log' % window, [], dtypes='<f8', fill_value=0.0)
-        x['measure_speedstddev_%s_log' % window] = np.log10(x['measure_speedstddev_%s' % window]+0.001)
-
-        x = np.lib.recfunctions.append_fields(x, 'measure_coursestddev_%s_log' % window, [], dtypes='<f8', fill_value=0.0)
-        x['measure_coursestddev_%s_log' % window] = np.log10(x['measure_coursestddev_%s' % window]+0.001)
-
-    x = np.lib.recfunctions.append_fields(x, 'score', [], dtypes='<f8', fill_value=0.0)
-
-    xuse = numpy.copy(x)
-    np.random.shuffle(xuse)
-    size = min(fishy(xuse).shape[0], nonfishy(xuse).shape[0], size/2)
-    xuse = np.concatenate((fishy(xuse)[:size], nonfishy(xuse)[:size]))
-    np.random.shuffle(xuse)
-
-    length = xuse.shape[0]
-    xtrain = xuse[:length / 2]
-    xcross = xuse[length/2:length*3/4]
-    xtest = xuse[length*3/4:]
-
-    return x, xtrain, xcross, xtest
 
 def _subsample_even(x0, mmsi, n):
     """Return `n` subsamples from `x0`
@@ -61,7 +22,7 @@ def _subsample_even(x0, mmsi, n):
     f = fishy(x)
     nf = nonfishy(x)
     if n//2 > len(f) or n//2 > len(nf):
-        print "Warning, inufficient items to sample, returning fewer"
+        warnings.warn("inufficient items to sample, returning fewer")
     f = np.random.choice(f, min(n//2, len(f)), replace=False)
     nf = np.random.choice(nf, min(n//2, len(nf)), replace=False)
     ss = np.concatenate([f, nf])
@@ -85,30 +46,74 @@ def _subsample_proportional(x0, mmsi, n):
     # Pick values randomly
     # Pick values randomly
     if n > len(x):
-        print "Warning, inufficient items to sample, returning", len(x)
+        warnings.warn("inufficient items to sample, returning {}".format(len(x)))
         n = len(x)
     ss = np.random.choice(x, n, replace=False)
     np.random.shuffle(ss)
     return ss
 
-def add_log_measures(x):
-    """Add log versions of each of speedstddev and coursestdev
-    """
-    all_windows = get_windows(x)
-    for window in all_windows:
-        x = np.lib.recfunctions.append_fields(x,
-                'measure_speedstddev_%s_log' % window, [],
-                 dtypes='<f8', fill_value=0.0)
-        x['measure_speedstddev_%s_log' % window] = np.log10(
-                x['measure_speedstddev_%s' % window]+0.001)
 
-        x = np.lib.recfunctions.append_fields(x,
-                'measure_coursestddev_%s_log' % window, [],
-                dtypes='<f8', fill_value=0.0)
-        x['measure_coursestddev_%s_log' % window] = np.log10(
-                x['measure_coursestddev_%s' % window]+0.001)
-    return np.lib.recfunctions.append_fields(x, 'score', [],
-                                    dtypes='<f8', fill_value=0.0)
+def _bin_counts(bins, counts):
+    bin_counts = []
+    for bin in bins:
+        bin_counts.append(sum(counts[i] for i in bin))
+    return bin_counts
+    
+
+def divide_counts(counts, proportions):
+    """Divide counts up in the proportions specified in props
+    
+    Parameters
+    ----------
+    counts : sequence of integers
+        Counts
+    
+    proportions : sequence of numbers
+        Proportions to divide sequences in. These are normalized
+        withing the function so `proportions=[2, 1, 1]` is equivalent
+        to `proportions=[0.5, 0.25, 0.25]`
+    
+    Returns
+    -------
+    list of lists of indices to counts.
+    
+    >>> some_counts = np.array([1, 2, 3])
+    >>> bins = divide_counts(some_counts, [3, 2, 1])
+    >>> [list(some_counts[x]) for x in bins]
+    [10, 10, 4]
+    
+    >>> many_counts = np.array([1, 2, 3] * 4)
+    >>> bins = divide_counts(many_counts, [3, 3, 1])
+    >>> [list(many_counts[x]) for x in bins]
+    [[3, 3, 2, 1, 1], [3, 2, 2, 2, 1], [3, 1]]
+    
+    """
+    if len(counts) < len(proportions):
+        raise ValueError("less sequences than proportions")
+    
+    # Normalize props
+    props = np.array(proportions, dtype=float)
+    props /= props.sum()
+    
+    # Sort our sequences from largest to smallest; we'll insert 
+    # largest first.
+    indices = list(np.argsort(counts))
+      
+    # Initialize our output; placing our largest sequence in
+    # the largest bin
+    bins = [[] for _ in props]
+    bins[np.argmax(props)].append(indices.pop())
+    
+    # Add the largest sequence to the bin with the largest deficit
+    # until we are out of sequences
+    while indices:
+        bincnts = _bin_counts(bins, counts)
+        expected = sum(bincnts) * props
+        deficits = expected - bincnts
+        bins[np.argmax(deficits)].append(indices.pop())
+        
+    return bins
+        
 
 def load_dataset_by_vessel(path, size = 20000, even_split=None, seed=4321):
     """Load a dataset from `path` and return train, valid and test sets
@@ -136,21 +141,28 @@ def load_dataset_by_vessel(path, size = 20000, even_split=None, seed=4321):
     # Load the dataset and strip out any points that aren't classified
     # (has classification == Inf)
     x = np.load(path)['x']
-    x = x[~np.isinf(x['classification']) & ~np.isnan(x['classification']) & ~np.isnan(x['timestamp']) & ~np.isnan(x['speed']) & ~np.isnan(x['course'])]
+    x = x[~np.isinf(x['classification']) & 
+          ~np.isnan(x['classification']) & 
+          ~np.isnan(x['timestamp']) & 
+          ~np.isnan(x['speed']) & 
+          ~np.isnan(x['course'])]
 
     if size > len(x):
-        print "Warning, insufficient items to sample, returning all"
+        warnings.warn("insufficient items to sample, returning all")
         size = len(x)
 
-    # Get the list of MMSI and shuffle them. The compute the cumulative
-    # lengths so that we can divide the points ~ evenly. Use search
-    # sorted to find the division points
-    mmsi = list(set(x['mmsi']))
+
+    mmsi = np.array(list(set(x['mmsi'])))
+    
     if even_split is None:
-        even_split = x['classification'].sum() > 1 and x['classification'].sum() < len(x)
+        even_split = (x['classification'].sum() > 1 and 
+                      x['classification'].sum() < len(x))
+        
     if even_split:
+        # Exclude mmsi that don't have at least one fishing and non-fishing 
+        # point. This helped with some pathological MMSI that were
+        # creeping in.
         base_mmsi = mmsi
-        # Exclude mmsi that don't have at least one fishing or nonfishing point
         mmsi = []
         for m in base_mmsi:
             subset = x[x['mmsi'] == m]
@@ -158,23 +170,15 @@ def load_dataset_by_vessel(path, size = 20000, even_split=None, seed=4321):
             if fishing_count == 0 or fishing_count == len(subset):
                 continue
             mmsi.append(m)
-    np.random.shuffle(mmsi)
-    nx = len(x)
-    sums = np.cumsum([(x['mmsi'] == m).sum() for m in mmsi])
-    n1, n2 = np.searchsorted(sums, [nx//2, 3*nx//4])
-    if n2 == n1:
-        n2 += 1
-
+        mmsi = np.array(mmsi)
+        
+    counts = [(x['mmsi'] == m).sum() for m in mmsi]
+          
+    indices = divide_counts(counts, [2, 1, 1])
     train_subsample = _subsample_even if even_split else _subsample_proportional
-
-    try:
-        xtrain = train_subsample(x, mmsi[:n1], size//2)
-        xcross = _subsample_proportional(x, mmsi[n1:n2], size//4)
-        xtest = _subsample_proportional(x, mmsi[n2:], size//4)
-    except Exception, e:
-        print "Broken data in", path
-        import pdb, sys
-        sys.last_traceback = sys.exc_info()[2]
-        pdb.set_trace()
+    
+    xtrain = train_subsample(x, mmsi[indices[0]], size//2)
+    xcross = _subsample_proportional(x, mmsi[indices[1]], size//4)
+    xtest = _subsample_proportional(x, mmsi[indices[2]], size//4)
 
     return x, xtrain, xcross, xtest
