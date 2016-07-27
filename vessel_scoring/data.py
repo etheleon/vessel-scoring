@@ -80,7 +80,7 @@ def divide_counts(counts, proportions):
     >>> some_counts = np.array([1, 2, 3])
     >>> bins = divide_counts(some_counts, [3, 2, 1])
     >>> [list(some_counts[x]) for x in bins]
-    [10, 10, 4]
+    [[3], [2], [1]]
     
     >>> many_counts = np.array([1, 2, 3] * 4)
     >>> bins = divide_counts(many_counts, [3, 3, 1])
