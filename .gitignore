@@ -1,5 +1,6 @@
 dumps
 datasets
+notebooks/untracked
 
 # Jupyter notebooks
 .ipynb_checkpoints
