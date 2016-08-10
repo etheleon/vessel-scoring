@@ -25,7 +25,12 @@ def daylight(longitude, latitude, timestamp):
     day_of_year = timestamp.timetuple().tm_yday - 1
     daylight = hours_per_day(latitude, day_of_year)
 
-    local_time = timestamp + datetime.timedelta(longitude / 360.0)
+    try:
+        local_time = timestamp + datetime.timedelta(longitude / 360.0)
+    except:
+        print("Problem in daylight")
+        print(timestamp, longitude)
+        local_time = timestamp
     noon = datetime.datetime.combine(local_time.date(), datetime.time(12, 0, 0))
 
     hours_from_noon = abs((local_time - noon).total_seconds() / 60.0 / 60.0)
