@@ -22,7 +22,6 @@ def add_features(in_path, out_path, default=None, keep_prob=1):
         print("Keeping points with probability", keep_prob)
         keep = np.random.random(size=len(data)) < keep_prob
         data = data[keep]  
-        
 
     # Sort by mmsi, then by timestamp
     data.sort(order=['mmsi', 'timestamp'])
