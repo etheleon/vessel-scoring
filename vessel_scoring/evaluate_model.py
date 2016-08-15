@@ -1,13 +1,65 @@
+from __future__ import division
 from vessel_scoring import utils
 from sklearn import metrics
 import matplotlib.pyplot as plt
 from IPython.core.display import display, HTML
+import numpy as np
+from IPython.core.display import display, HTML, Markdown
 
 def evaluate_model(model, test_data, name=None):
     evaluate_score(
         model.predict_proba(test_data)[:,1],
         test_data,
         str(model) if (name is None) else name)
+
+
+def compare_models_at_threshold(models, threshold=None, 
+                                recall=None, precision=None):
+    if (threshold is None) + (recall is None) + (precision is None) != 2:
+        raise ValueError("exactly one of threshold, recall and precision"
+                         "must be specified")
+    predictions = {}
+
+    if isinstance(models, dict):
+        models = models.items()
+        models.sort(lambda a, b: cmp(a[0], b[0]))
+
+    for name, mdl, test_data in models:
+        proba = mdl.predict_proba(test_data)[:,1]
+        is_fishy = utils.is_fishy(test_data)
+        precisions, recalls, thresholds = metrics.precision_recall_curve(is_fishy, proba)
+        if recall or precision:
+            if precision is None:
+                limit = recall
+                args = reversed(list(enumerate(recalls)))
+            else:
+                limit = precision
+                args = list(enumerate(precisions))
+            for i, x in args:
+                # can't use searchsorted without extra work since recalls might not be sorted exactly
+                if x > limit:
+                    break            
+            i = np.clip(i, 0, len(thresholds) - 1)
+            threshold = thresholds[i]
+        err = abs(proba - is_fishy).mean()
+        predictions[name] = ((mdl.predict_proba(test_data)[:,1] > threshold), is_fishy, err)
+
+    lines = ["|Model|Recall|Precision|F1-Score|False Pos Rate|Err|Err2|ACC|",
+         "|-----|------|---------|--------|"]
+    for name in sorted(predictions):
+        pred, actual, err = predictions[name]
+        neg_count = (actual == 0).sum()
+        fp_count = ((actual == 0) & (pred == 1)).sum()
+        lines.append("|{}|{:.2f}|{:.2f}|{:.2f}|{:.2f}|{:.2f}|{:.2f}|{:.2f}|".format(
+                name, 
+                metrics.recall_score(actual, pred),
+                metrics.precision_score(actual, pred), 
+                metrics.f1_score(actual, pred),
+                fp_count / neg_count,
+                err,
+                abs(pred - actual).mean(),
+                metrics.accuracy_score(actual, pred)))
+    display(Markdown('\n'.join(lines)))
 
 
 def evaluate_score(score, test_data, name):
@@ -98,10 +150,11 @@ def compare_models(models, test_data):
     for (name, mdl) in models:
         score = mdl.predict_proba(test_data)[:,1]
         precisions, recalls, thresholds = metrics.precision_recall_curve(is_fishy, score)
-        a2.plot(recalls, precisions, label='{0}'.format(name))
-    a2.set_xlabel('Recall')
-    a2.set_ylabel('Precision')
+        a2.plot(precisions, recalls, label='{0}'.format(name))
+    a2.set_ylabel('Recall')
+    a2.set_xlabel('Precision')
     a2.legend(loc="lower right")
+    a2.set_xlim(1, 0)
     a2.set_ylim(0, 1)
 
     plt.show()

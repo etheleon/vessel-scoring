@@ -106,7 +106,21 @@ def clone_subset(x, dtype):
         new[name] = x[name]
     return new
 
-
+def common_dtype(*arrays):
+    names = set(arrays[0].dtype.names)
+    for a in arrays[1:]:
+        names &= set(a.dtype.names)
+    for n in names:
+        expected_field_type = arrays[0].dtype.fields[n][0]
+        for a in arrays[1:]:
+            if a.dtype.fields[n][0] != expected_field_type:
+                raise ValueError("field `{}` has multiple types".format(n))
+    dtype = np.dtype([(n, a.dtype.fields[n][0]) for n in sorted(names)])
+    return dtype
+    
+def concat_common_fields(*arrays):
+    dtype = common_dtype(*arrays)
+    return np.concatenate([clone_subset(a, dtype) for a in arrays])
 
 def numpy_to_messages(arr):
     def convert_row(row):
