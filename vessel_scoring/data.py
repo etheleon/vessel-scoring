@@ -61,12 +61,22 @@ def _bin_counts(bins, counts):
     
 
 def divide_counts(counts, proportions):
-    """Divide counts up in the proportions specified in props
+    """Divide counts up in the proportions specified in props    
+    
+    `counts` is the number of points associated with each MMSI. This
+    code attempts to divide the MMSI into bins so each bin has points
+    in roughly the same proportions as `proportions`. The strategy
+    used is
+
+    1. Put the largest count in the bin with the largest proportion.
+    2. Starting from the next smallest, put the current MMSI in the
+       bin that needs the most points to be at the correct proportion.
+    
     
     Parameters
     ----------
     counts : sequence of integers
-        Counts
+        Numbers of items for each mmsi.
     
     proportions : sequence of numbers
         Proportions to divide sequences in. These are normalized
@@ -75,7 +85,10 @@ def divide_counts(counts, proportions):
     
     Returns
     -------
-    list of lists of indices to counts.
+    list of lists of indices into counts. If `mmsi` is an array of
+    MMSI values in the same order as `counts`, then `mmsi[indices[N]]`
+    are the indices belonging to the Nth bin, where `indices` is the
+    returned value of this function
     
     >>> some_counts = np.array([1, 2, 3])
     >>> bins = divide_counts(some_counts, [3, 2, 1])
