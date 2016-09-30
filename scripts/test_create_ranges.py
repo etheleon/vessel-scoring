@@ -8,6 +8,15 @@ import logging
 import create_fishing_nonfishing_ranges as cfr
 
 
+def is_sorted(x):
+	last = x[0]
+	for this in x[1:]:
+		if this < last:
+			return False
+		last = this
+	return True
+
+
 def create_fishing_series(mmsi, times, ranges):
 	"""
 
@@ -20,8 +29,8 @@ def create_fishing_series(mmsi, times, ranges):
 
 	ranges: sequence of (mmsi, start_time, end_time, is_fishing)
 		mmsi : str
-		start_time : datetime
-		stop_time : datetime
+		start_time : str in ISO 8601 format
+		stop_time : str in ISO 8601 format
 		is_fishing : boolean
 
 	Returns
@@ -31,7 +40,8 @@ def create_fishing_series(mmsi, times, ranges):
 		don't know
 
 	"""
-	# TODO: check that times are sorted
+	if not is_sorted(times):
+		raise ValueError("times must be sorted")
 	# Only look at ranges associated with the current mmsi
 	ranges = ranges[ranges['mmsi'] == mmsi]
 	# Initialize is_fishing to -1 (don't know)
@@ -39,12 +49,8 @@ def create_fishing_series(mmsi, times, ranges):
 	is_fishing.fill(-1)
 	#
 	for _, (_, startstr, endstr, state) in ranges.iterrows():
-		try:
-			start = dateutil.parser.parse(startstr)
-			end = dateutil.parser.parse(endstr)
-		except:
-			print(startstr, endstr, state)
-			raise
+		start = dateutil.parser.parse(startstr)
+		end = dateutil.parser.parse(endstr)
 		i0 = np.searchsorted(times, start, side="left")
 		i1 = np.searchsorted(times, end, side="right")
 		is_fishing[i0: i1] = state
@@ -78,6 +84,10 @@ def test_round_trip(source_paths, range_path):
 											len(unknown_mask), pth, m))
 
 
+def test_is_sorted():
+	assert is_sorted([0, 1, 1, 2, 3, 4, 5, 5])
+	assert not is_sorted([0, 1, 2, 1, 3, 4, 5])
+
 
 if __name__ == "__main__":
 	import argparse
@@ -89,4 +99,5 @@ if __name__ == "__main__":
 	parser.add_argument('--range-path', help='path to range file')
 	args = parser.parse_args()
 	in_paths = glob.glob(os.path.join(args.source_dir, "*.csv"))
+	test_is_sorted()
 	test_round_trip(in_paths, args.range_path)
