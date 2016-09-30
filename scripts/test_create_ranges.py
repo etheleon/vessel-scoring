@@ -3,8 +3,10 @@ from __future__ import division
 import numpy as np
 import pandas as pd
 import datetime
+import dateutil
 import logging
 import create_fishing_nonfishing_ranges as cfr
+
 
 def test_round_trip(source_paths, range_path):
 	ranges = pd.read_csv(range_path)
@@ -16,8 +18,8 @@ def test_round_trip(source_paths, range_path):
 			logging.info("processing mmsi: {}".format(pth))
 			sub_ranges = ranges[ranges['mmsi'] == m]
 			sub_examples = examples[examples['MMSI'] == m]
-			starts = pd.to_datetime(sub_ranges['start_time'])
-			stops = pd.to_datetime(sub_ranges['end_time'])
+			starts = [dateutil.parser.parse(x) for x in sub_ranges['start_time']]
+			stops = [dateutil.parser.parse(x) for x in sub_ranges['end_time']]
 			is_fishing = (sub_ranges['is_fishing'] == 1)
 			logging.info("{} ranges present".format(len(starts)))
 			example_times = np.array([cfr.get_kristina_timestamp(x) for (_, x) in sub_examples.iterrows()])

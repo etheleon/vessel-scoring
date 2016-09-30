@@ -3,13 +3,14 @@ from __future__ import division
 import numpy as np
 import pandas as pd
 import datetime
+import pytz
 import logging
 
 def get_kristina_timestamp(x):
     if 'DATETIME' in x:
-        return datetime.datetime.strptime(x['DATETIME'], "%Y-%m-%d %H:%M:%S")
+        return datetime.datetime.strptime(x['DATETIME'], "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.utc)
     elif 'TIME' in x:
-        return datetime.datetime.strptime(x['TIME'], "%Y%m%d_%H%M%S")
+        return datetime.datetime.strptime(x['TIME'], "%Y%m%d_%H%M%S").replace(tzinfo=pytz.utc)
     else:
         assert False, "NO TIME: {}".format(x)
 
