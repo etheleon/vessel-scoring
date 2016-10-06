@@ -40,38 +40,44 @@ def points_from_path(pth, dialect=kristina):
 
 
 def dedup_and_sort_points(points):
-	points.sort()
-	dedupped = []
-	last_key = (None, None)
-	last_fishing = None
-	for mmsi, timestamp, is_fishing in points:
-		key = (mmsi, timestamp)
-		if key == last_key:
-			if is_fishing != last_fishing:
-				dedupped[-1] = (mmsi, timestamp, None)
-		else:
-			dedupped.append((mmsi, timestamp, is_fishing))
-			last_key = key
-			last_fishing = is_fishing
-	return dedupped
+    points.sort()
+    dedupped = []
+    last_key = (None, None)
+    last_fishing = None
+    for mmsi, timestamp, is_fishing in points:
+        key = (mmsi, timestamp)
+        is_fishing = None if is_fishing in (-1, 2) else is_fishing
+        if key == last_key:
+            if is_fishing != last_fishing:
+                dedupped[-1] = (mmsi, timestamp, None)
+        else:
+            dedupped.append((mmsi, timestamp, is_fishing))
+            last_key = key
+            last_fishing = is_fishing
+
+    return dedupped
+
+
+def ranges_from_points(points):
+    points = dedup_and_sort_points(points)
+    current_state = None
+    current_mmsi = None
+    ranges = []
+    for mmsi, time, state in points:
+        if mmsi != current_mmsi or state != current_state:
+            if current_state is not None:
+                ranges.append((current_mmsi, range_start.isoformat(), last_time.isoformat(), current_state))
+            current_state = state
+            range_start = time
+            current_mmsi = mmsi
+        last_time = time
+    if current_state is not None:
+        ranges.append((current_mmsi, range_start.isoformat(), last_time.isoformat(), current_state))
+    return ranges
 
 
 def ranges_from_path(pth, dialect=kristina):
-	points = dedup_and_sort_points(points_from_path(pth))
-	current_state = None
-	current_mmsi = None
-	ranges = []
-	for mmsi, time, state in points:
-		if mmsi != current_mmsi or state != current_state:
-			if current_state is not None:
-				ranges.append((mmsi, range_start.isoformat(), last_time.isoformat(), current_state))
-			current_state = state
-			range_start = time
-			current_mmsi = mmsi
-		last_time = time
-	if current_state is not None:
-		ranges.append((mmsi, range_start.isoformat(), last_time.isoformat(), current_state))
-	return ranges
+	return ranges_from_points(points_from_path(pth, dialect=dialect))
 
 
 def ranges_from_multiple_paths(paths):
