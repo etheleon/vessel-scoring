@@ -10,7 +10,7 @@ import numpy as np
 def dedup_messages(messages):
     last_key = None
     for msg in messages:
-        key = (msg.get('mmsi', None), mdg.get("seg_id", None), msg['timestamp'])
+        key = (msg.get('mmsi', None), msg.get("seg_id", None), msg['timestamp'])
         if key == last_key:
             continue
         yield msg
