@@ -13,19 +13,19 @@ import importlib
 import datetime
 
 TRANSIT_WEIGHT = 10
-all_data = ['kristina_trawl', 'kristina_longliner', 'kristina_ps'] + ['slow-transits'] * TRANSIT_WEIGHT 
+all_data = ['kristina_trawl', 'kristina_longliner', 'kristina_ps'] + ['false_positives'] * TRANSIT_WEIGHT 
 colspec={"windows": vessel_scoring.colspec.Colspec.windows}
 
 untrained_models = {
     'Logistic':               {'model': vessel_scoring.logistic_model.LogisticModel(colspec=colspec, order=6), 'data': all_data},
 
     'Logistic--Longliner':    {'model': vessel_scoring.logistic_model.LogisticModel(colspec=colspec, order=6),
-                               'data': ['kristina_longliner'] + ['slow-transits'] * 10},
+                               'data': ['kristina_longliner'] + ['false_positives'] * 10},
     'Logistic--Trawler':      {'model': vessel_scoring.logistic_model.LogisticModel(colspec=colspec, order=6),
-                               'data': ['kristina_trawl'] + ['slow-transits'] * 10},
+                               'data': ['kristina_trawl'] + ['false_positives'] * 10},
 
     # 'Logistic--Purse seine OLD': {'model': vessel_scoring.logistic_model.LogisticModel(colspec=colspec, order=6),
-    #                               'data': ['kristina_ps'] + ['slow-transits'] * 10},
+    #                               'data': ['kristina_ps'] + ['false_positives'] * 10},
 
     'Logistic--Purse seine':  {
         'model': vessel_scoring.logistic_model.LogisticModel(
@@ -35,7 +35,7 @@ untrained_models = {
                 "measures": vessel_scoring.colspec.Colspec.measures + ["measure_speed", "measure_daylight"]
                 },
             order=3, cross=2),
-        'data': ['kristina_ps'] + ['slow-transits'] * 10},
+        'data': ['kristina_ps'] + ['false_positives'] * 10},
 
     'Logistic opt MSE':       {'model': vessel_scoring.logistic_model.LogisticModel(colspec=colspec, order=4, cross=3), 'data': all_data},
     'Random Forest':          {'model': vessel_scoring.random_forest_model.RandomForestModel(colspec=colspec), 'data': all_data},
@@ -51,11 +51,15 @@ untrained_models = {
     'Logistic (MW)': {'active': False, 'compare_models': True,
                       'model': vessel_scoring.logistic_model.LogisticModel(colspec=dict(windows=vessel_scoring.colspec.Colspec.windows), order=6),
                       'data': all_data},
+    'Logistic (MW & daylight)': {'active': False, 'compare_models': True,
+                                 'model': vessel_scoring.logistic_model.LogisticModel(colspec=dict(windows=vessel_scoring.colspec.Colspec.windows,
+                                                                                                   measures=['measure_daylight']), order=6),
+                                 'data': all_data},
     # Using `speed` here rather than `measure_speed` gives terrible results. Overflow? Just way too large?
-    'Logistic (MW & speed)': {'active': False, 'compare_models': True,
+    'Logistic (MW & daylight & speed)': {'active': False, 'compare_models': True,
                                          'model': vessel_scoring.logistic_model.LogisticModel(
                                              colspec=dict(windows=vessel_scoring.colspec.Colspec.windows,
-                                                          measures=['measure_speed']), order=6),
+                                                          measures=['measure_daylight', 'measure_speed']), order=6),
                                          'data': all_data},
     'Random Forest': {'active': False, 'compare_models': True,
                       'model': vessel_scoring.random_forest_model.RandomForestModel(colspec=dict(windows=[43200])),
@@ -63,10 +67,15 @@ untrained_models = {
     'Random Forest (MW)': {'active': False, 'compare_models': True,
                            'model': vessel_scoring.random_forest_model.RandomForestModel(colspec=dict(windows=vessel_scoring.colspec.Colspec.windows)),
                            'data': all_data},
-    'Random Forest (MW & speed)': {'active': False, 'compare_models': True,
+    'Random Forest (MW & daylight)': {'active': False, 'compare_models': True,
                                       'model': vessel_scoring.random_forest_model.RandomForestModel(colspec=dict(windows=vessel_scoring.colspec.Colspec.windows,
-                                                                                                                 measures=['speed'])),
+                                                                                                                 measures=['measure_daylight'])),
                                       'data': all_data},
+    'Random Forest (MW & daylight & speed)': {'active': False, 'compare_models': True, 'model': vessel_scoring.random_forest_model.RandomForestModel
+                                              (colspec=dict(windows=vessel_scoring.colspec.Colspec.windows,
+                                                            measures=['measure_daylight', 'speed'])),
+                                              'data': all_data},
+
 
     #### Old models ####
     'Logistic (MW/cross3)': {'active': False, 'model': vessel_scoring.logistic_model.LogisticModel(colspec=colspec, order=6, cross=2), 'data': all_data},
@@ -79,7 +88,7 @@ untrained_models = {
 
 def load_data(dir = None):
     if dir is None:
-        dir = os.path.join(os.path.dirname(__file__), '..', 'datasets')
+        dir = os.path.join(os.path.dirname(__file__), '..', 'datasets/data/labeled')
 
     datasets = {}
     for filename in os.listdir(dir):

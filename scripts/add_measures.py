@@ -13,8 +13,8 @@ orig = numpy.load(sys.argv[1])['x']
 if len(sys.argv) >= 4:
     default = int(sys.argv[3])
     print "Replacing Infs and NaNs with", default
-    is_missing = np.isnan(orig['classification']) | np.isinf(orig['classification'])
-    orig['classification'][is_missing] = default
+    is_missing = np.isnan(orig['is_fishing']) | np.isinf(orig['is_fishing'])
+    orig['is_fishing'][is_missing] = default
     
 if len(sys.argv) >= 5:
     np.random.seed(4321)

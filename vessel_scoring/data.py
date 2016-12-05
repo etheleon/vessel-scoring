@@ -19,7 +19,7 @@ def load_dataset(path, size = 20000):
     #   exponentially distributed
 
     x = np.load(path)['x']
-    x = x[~np.isinf(x['classification']) & ~np.isnan(x['classification']) & ~np.isnan(x['timestamp']) & ~np.isnan(x['speed']) & ~np.isnan(x['course'])]
+    x = x[~np.isinf(x['is_fishing']) & ~np.isnan(x['is_fishing']) & ~np.isnan(x['timestamp']) & ~np.isnan(x['speed']) & ~np.isnan(x['course'])]
 
     all_windows = get_windows(x)
 
@@ -135,9 +135,9 @@ def load_dataset_by_vessel(path, size = 20000, even_split=None, seed=4321):
     np.random.seed(seed)
 
     # Load the dataset and strip out any points that aren't classified
-    # (has classification == Inf)
+    # (has is_fishing == Inf)
     x = np.load(path)['x']
-    x = x[~np.isinf(x['classification']) & ~np.isnan(x['classification']) & ~np.isnan(x['timestamp']) & ~np.isnan(x['speed']) & ~np.isnan(x['course'])]
+    x = x[~np.isinf(x['is_fishing']) & ~np.isnan(x['is_fishing']) & ~np.isnan(x['timestamp']) & ~np.isnan(x['speed']) & ~np.isnan(x['course'])]
 
     if size > len(x):
         print "Warning, insufficient items to sample, returning all"
@@ -148,14 +148,14 @@ def load_dataset_by_vessel(path, size = 20000, even_split=None, seed=4321):
     # sorted to find the division points
     mmsi = list(set(x['mmsi']))
     if even_split is None:
-        even_split = x['classification'].sum() > 1 and x['classification'].sum() < len(x)
+        even_split = x['is_fishing'].sum() > 1 and x['is_fishing'].sum() < len(x)
     if even_split:
         base_mmsi = mmsi
         # Exclude mmsi that don't have at least one fishing or nonfishing point
         mmsi = []
         for m in base_mmsi:
             subset = x[x['mmsi'] == m]
-            fishing_count = subset['classification'].sum()
+            fishing_count = subset['is_fishing'].sum()
             if fishing_count == 0 or fishing_count == len(subset):
                 continue
             mmsi.append(m)

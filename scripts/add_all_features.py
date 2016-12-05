@@ -2,11 +2,10 @@ import os
 from add_features import add_features
 
 
-base_path = 'datasets'
+base_path = 'datasets/data/labeled/'
 
 # (path, default-arg)
-templates = [('slow-transits{}.npz', 0),
-             ('new_transits{}.npz', 0),
+templates = [('false_positives{}.npz', 0),
              ('kristina_trawl{}.npz', None),
              ('kristina_ps{}.npz', None),
              ('kristina_longliner{}.npz', None)]

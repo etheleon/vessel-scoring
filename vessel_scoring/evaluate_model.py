@@ -89,7 +89,7 @@ def compare_models_at_cutoff(models, test_data, predictions = None):
         models.sort(lambda a, b: cmp(a[0], b[0]))
 
     for name, mdl in models:
-        predictions[name] = ((mdl.predict_proba(test_data)[:,1] > 0.5), test_data['classification'])
+        predictions[name] = ((mdl.predict_proba(test_data)[:,1] > 0.5), test_data['is_fishing'])
 
     lines = ["|Model|Recall|Precision|F1-Score|",
          "|-----|------|---------|--------|"]
@@ -138,6 +138,6 @@ def load_dal_predictions(path):
         raise IOError(path)
     dal_res = pandas.read_csv(path)
     mask = np.array([(x in test_mmsi) for x in dal_res['mmsi']]).astype(bool)
-    res = (dal_res.preds[mask], dal_res.classification[mask])
+    res = (dal_res.preds[mask], dal_res.is_fishing[mask])
     # Fix predictions for Trawler.py
     return ([{'F': 1, 'N': 0}.get(x, x) for x in res[0]], res[1])

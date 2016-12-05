@@ -7,24 +7,15 @@ from vessel_scoring import utils
 from vessel_scoring import add_measures
 import numpy as np
 
-def dedup_messages(messages):
-    last_key = None
-    for msg in messages:
-        key = (msg.get('mmsi', None), mdg.get("seg_id", None), msg['timestamp'])
-        if key == last_key:
-            continue
-        yield msg
-        last_key = key
-
 
 def add_features(in_path, out_path, default=None, keep_prob=1):
     data = np.load(in_path)['x']
     
     if default is not None:
         print("Replacing Infs and NaNs with", default)
-        is_missing = (np.isnan(data['classification']) | 
-                      np.isinf(data['classification']))
-        data['classification'][is_missing] = default
+        is_missing = (np.isnan(data['is_fishing']) | 
+                      np.isinf(data['is_fishing']))
+        data['is_fishing'][is_missing] = default
         
     if keep_prob < 1:
         np.random.seed(4321)
@@ -35,7 +26,6 @@ def add_features(in_path, out_path, default=None, keep_prob=1):
     # Sort by mmsi, then by timestamp
     data.sort(order=['mmsi', 'timestamp'])
     messages = utils.numpy_to_messages(data)
-    messages = dedup_messages(messages)
     messages = add_measures.AddMeasures(messages)
     result = utils.messages_to_numpy(messages, len(data))
 

@@ -86,7 +86,8 @@ class AddWindowMeasures(object):
     Requires two handles to the _same_ stream of messages for the two ends of the window.
     """
 
-    def __init__(self, messages, window_size=datetime.timedelta(seconds=60 * 60), offset=datetime.timedelta(0.0)):
+    def __init__(self, messages, window_size=datetime.timedelta(seconds=60 * 60)):
+
         """
         Iterate to get messages with additional measures.
 
@@ -96,18 +97,14 @@ class AddWindowMeasures(object):
             GPSd messages.
         window_size : datetime.timedelta, optional
             Size of window in seconds.
-        offset: float ]0, 1[
-            Offset from the end of the window.
         """
-        stream1, stream2, stream3 = itertools.tee(messages, 3)
+
+        stream1, stream2 = itertools.tee(messages, 2)
         self.startIn = self.load_lines(stream1)
-        self.middleIn = self.load_lines(stream2)
-        self.endIn = self.load_lines(stream3)
+        self.endIn = self.load_lines(stream2)
         self.current_track = None
         self.window_size = window_size
-        self.offset = offset
         self.startidx = -1
-        self.endidx = -1
         self._iterator = None
 
     def __iter__(self):
@@ -124,13 +121,13 @@ class AddWindowMeasures(object):
         for idx, line in enumerate(in_file):
             yield idx, line
 
-    def get_measures(self):
+    def add_measures_to_row(self):
         s = self.stats.get()
-        # # Knots...
-        # s['measure_pos'] = (s['measure_pos'] * 60) / (self.window_size.total_seconds() / 60 / 60)
-        # # Normalize to "normal" vessel speed
-        # s['measure_pos'] /= 17.0
-        # s['measure_pos'] = min(1.0, s['measure_pos'])
+        # Knots...
+        s['measure_pos'] = (s['measure_pos'] * 60) / (self.window_size.total_seconds() / 60 / 60)
+        # Normalize to "normal" vessel speed
+        s['measure_pos'] /= 17.0
+        s['measure_pos'] = min(1.0, s['measure_pos'])
 
         s = {"%s_%s" % (key, int(self.window_size.total_seconds())): value
              for key, value in s.iteritems()}
@@ -140,12 +137,12 @@ class AddWindowMeasures(object):
             if 'stddev' in key:
                 s[key + "_log"] = float(numpy.log10(value + EPSILON))
 
-        return s
+        self.end.update(s)
 
     def start_track(self):
-        self.current_track = self.middle
+        self.current_track = self.end
+        self.prev = None
         self.stats = rolling_measures.Stats({
-            # 'speed_avg' : rolling_measures.Stat("speed", rolling_measures.Avg),
             'measure_count' :  rolling_measures.Stat('measure_speed', rolling_measures.Count),
             "measure_daylightavg": rolling_measures.Stat("measure_daylight", rolling_measures.Avg),
             "measure_coursestddev": rolling_measures.StatSum(
@@ -161,55 +158,41 @@ class AddWindowMeasures(object):
                 rolling_measures.Stat("lon", rolling_measures.StdDev))
         })
 
-    def row_in_current_track(self, row):
-        return (self.current_track and
-                row.get('mmsi', None) == self.current_track.get('mmsi', None) and
-                row.get('seg_id', None) == self.current_track.get('seg_id', None))
-
     def process(self):
+        for self.endidx, self.end in self.endIn:
+            if (self.end.get('course') is None or
+                self.end.get('speed') is None or
+                self.end.get('timestamp') is None):
+                yield self.end
+                continue
 
-        def valid(x):
-            return (x and
-                    x.get('timestamp') is not None and
-                    x.get('course') is not None and                    
-                    x.get('speed') is not None 
-                    )
+            if (not self.current_track or
+                    self.end.get('mmsi', None) != self.current_track.get('mmsi', None) or
+                    self.end.get('seg_id', None) != self.current_track.get('seg_id', None)):
+                while self.startidx < self.endidx:
+                    self.startidx, self.start = self.startIn.next()
+                self.start_track()
 
-        for self.middleidx, self.middle in self.middleIn:
-            if valid(self.middle):
+            self.stats.add(self.end)
 
-                if not self.row_in_current_track(self.middle):
-                    while self.startidx < self.middleidx:
-                        self.startidx, self.start = self.startIn.next()
-                    while self.endidx < self.middleidx:
-                        self.endidx, self.end = self.endIn.next()
-                    self.start_track()
-
-                while self.row_in_current_track(self.end):
-                    if valid(self.end):
-                        if self.end['timestamp'] - self.middle['timestamp'] > self.offset:
-                            break
-                        self.stats.add(self.end)
-                    try:
-                        self.endidx, self.end = self.endIn.next()
-                    except StopIteration:
-                        break
-
-
-                while self.row_in_current_track(self.start):
-                    if valid(self.start):
-                        if self.middle['timestamp'] - self.start['timestamp']  <= (self.window_size - self.offset):
-                            break
+            if 'timestamp' in self.end:
+                while (   not self.start
+                       or 'timestamp' not in self.start
+                       or self.end['timestamp'] - self.start['timestamp'] > self.window_size):
+                    if self.start:
                         self.stats.remove(self.start)
-                    try:
+
+                    self.startidx, self.start = self.startIn.next()
+                    while (self.start.get('course') is None or
+                           self.start.get('speed') is None or
+                           self.start.get('timestamp') is None):
                         self.startidx, self.start = self.startIn.next()
-                    except StopIteration:
-                        break
 
+            self.add_measures_to_row()
 
-                self.middle.update(self.get_measures())
+            out = self.end.copy() # XXX do we need to copy here?
 
-            yield self.middle
+            yield out
 
 
 class AddPairMeasures(object):
@@ -260,16 +243,12 @@ class AddPairMeasures(object):
 
 
 
-def AddMeasures(messages, windows = [900, 1800, 3600, 10800, 21600, 43200, 86400],
-        offsets = [0, 0, 0, 0, 0, 0, 0]
-        # offsets = [450, 900, 1800, 5400, 10800, 21600, 43200]
-               ):
+def AddMeasures(messages, windows = [1800, 3600, 10800, 21600, 43200, 86400]):
     messages = AddPointMeasures(messages)
 
     messages = AddNormalizedMeasures(messages)
 
-    for window_size, delta in zip(windows, offsets):
-        messages = AddWindowMeasures(messages, datetime.timedelta(seconds=window_size), 
-                datetime.timedelta(seconds=delta))
+    for window_size in windows:
+        messages = AddWindowMeasures(messages, datetime.timedelta(seconds=window_size))
 
     return messages

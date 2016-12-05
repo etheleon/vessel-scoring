@@ -54,10 +54,6 @@ class LogisticModel(LogisticRegression, vessel_scoring.base_model.BaseModel):
         if intercept is not None:
             self.intercept_ = np.array(intercept)
 
-    @property
-    def windows(self):
-        return self.colspec.windows
-
     def fit(self, X, y):
         """Fit model bease on features `X` and labels `y`"""
         X = self._make_features(X)
@@ -96,10 +92,6 @@ class LogisticScorer(vessel_scoring.base_model.BaseModel):
         self.order = order
         self.cross = cross
         self.colspec = vessel_scoring.colspec.Colspec(**colspec)
-
-    @property
-    def windows(self):
-        return self.colspec.windows
 
     def predict(self, X):
         """predict is_fishing based on feature vector `X`"""

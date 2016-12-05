@@ -29,7 +29,7 @@ colmap = {
   "course": lambda r: rescale(r, 'COG'),
   "speed": lambda r: rescale(r, 'SOG'),
   "timestamp": get_time,
-  "classification": lambda r: float(r['COARSE_FIS'])
+  "is_fishing": lambda r: float(r['COARSE_FIS'])
 }
 
 def get_file_size(path):

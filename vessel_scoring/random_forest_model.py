@@ -17,10 +17,6 @@ class RandomForestModel(RandomForestClassifier, vessel_scoring.base_model.BaseMo
                                         random_state=random_state)
         self.colspec = vessel_scoring.colspec.Colspec(**colspec)
 
-    @property
-    def windows(self):
-        return self.colspec.windows
-
     def _make_features(self, data):
         """Convert dataset into feature matrix suitable for model"""
         return np.transpose(self.colspec.get_cols(data))

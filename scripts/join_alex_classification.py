@@ -5,22 +5,22 @@ import sys
 import math
 
 names=set()
-classifications = {}
+is_fishings = {}
 with open(sys.argv[2]) as f:
     for row in csv.DictReader(f, skipinitialspace=True):
         mmsi = row['mmsi'] = int(row['mmsi'])
-        if mmsi not in classifications: classifications[mmsi] = {}
+        if mmsi not in is_fishings: is_fishings[mmsi] = {}
         t = row['start_hour_ms'] = datetime.datetime.utcfromtimestamp(float(row['start_hour_ms'])/1000.0)
-        if t not in classifications[mmsi]: classifications[mmsi][t] = set()
-        classifications[mmsi][t].add(row['classification'])
-        names.add(row['classification'])
+        if t not in is_fishings[mmsi]: is_fishings[mmsi][t] = set()
+        is_fishings[mmsi][t].add(row['is_fishing'])
+        names.add(row['is_fishing'])
 
 
 with gpsdio.open(sys.argv[3], "w") as outf:
     with gpsdio.open(sys.argv[1]) as f:
         c = 0
         for row in f:
-            mmsiclass = classifications[int(row['mmsi'])]
+            mmsiclass = is_fishings[int(row['mmsi'])]
             keys = [key for key in mmsiclass.iterkeys()
                    if key <= row['timestamp'] and key + datetime.timedelta(hours=1) >= row['timestamp']]   
             if keys:
@@ -31,9 +31,9 @@ with gpsdio.open(sys.argv[3], "w") as outf:
                     fishing = len([cls for cls in clss if cls and cls != 'Not fishing'])
                     longliner = len([cls for cls in clss if cls == 'Longliner'])
                     purse_seine = len([cls for cls in clss if cls == 'Purse seine'])
-                    row['classification'] = float(fishing) / float(total)
-                    row['classification_longliner'] = float(longliner) / float(total)
-                    row['classification_purse_seine'] = float(purse_seine) / float(total)
+                    row['is_fishing'] = float(fishing) / float(total)
+                    row['is_fishing_longliner'] = float(longliner) / float(total)
+                    row['is_fishing_purse_seine'] = float(purse_seine) / float(total)
             for key in row:
                 if isinstance(row[key], float) and (math.isnan(row[key]) or math.isinf(row[key])):
                     row[key] = None
