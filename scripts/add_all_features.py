@@ -8,7 +8,8 @@ base_path = 'datasets/data/labeled/'
 templates = [('false_positives{}.npz', 0),
              ('kristina_trawl{}.npz', None),
              ('kristina_ps{}.npz', None),
-             ('kristina_longliner{}.npz', None)]
+             ('kristina_longliner{}.npz', None),
+             ('alex_crowd_sourced{}.npz', None)]
              
 
 if __name__ == '__main__':
