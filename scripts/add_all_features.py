@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 import os
 from add_features import add_features
 
@@ -5,12 +7,7 @@ from add_features import add_features
 base_path = 'datasets/data/labeled/'
 
 # (path, default-arg)
-templates = [('false_positives{}.npz', 0),
-             ('kristina_trawl{}.npz', None),
-             ('kristina_ps{}.npz', None),
-             ('kristina_longliner{}.npz', None),
-             ('alex_crowd_sourced{}.npz', None)]
-             
+defaults = {'false_positives.npz': 0}             
 
 if __name__ == '__main__':
     import argparse
@@ -30,11 +27,14 @@ if __name__ == '__main__':
     else:
         suffix = ''
 
-    for name, default in templates:
-        in_path = os.path.join(base_path, name.format(''))
-        out_path = os.path.join(base_path, name.format('.measures' + suffix))
+    for name in os.listdir(base_path):
+        if not name.endswith(".npz"): continue
+        default = defaults.get(name, None)
+        in_path = os.path.join(base_path, name)
+        basename, ext = os.path.splitext(name)
+        out_path = os.path.join(base_path, basename + '.measures' + suffix + ext)
         
-        print("Creating", out_path)
+        print("Creating %s with default %s" % (out_path, default))
 
         add_features(in_path, out_path, 
                      default=default, 

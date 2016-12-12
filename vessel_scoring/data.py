@@ -19,6 +19,9 @@ def load_dataset(path, size = 20000):
     #   exponentially distributed
 
     x = np.load(path)['x']
+    return split_dataset(x, size)
+
+def split_dataset(x, size = 20000):
     x = x[~np.isinf(x['is_fishing']) & ~np.isnan(x['is_fishing']) & ~np.isnan(x['timestamp']) & ~np.isnan(x['speed']) & ~np.isnan(x['course'])]
 
     all_windows = get_windows(x)
@@ -111,7 +114,10 @@ def add_log_measures(x):
     return np.lib.recfunctions.append_fields(x, 'score', [],
                                     dtypes='<f8', fill_value=0.0)
 
-def load_dataset_by_vessel(path, size = 20000, even_split=None, seed=4321):
+def load_dataset_by_vessel(path, **kw):
+    return split_dataset_by_vessel(np.load(path)['x'])
+
+def split_dataset_by_vessel(x, size = 20000, even_split=None, seed=4321):
     """Load a dataset from `path` and return train, valid and test sets
 
     path - path to the dataset
@@ -134,9 +140,8 @@ def load_dataset_by_vessel(path, size = 20000, even_split=None, seed=4321):
     # Set the seed so that we can reproduce results consistently
     np.random.seed(seed)
 
-    # Load the dataset and strip out any points that aren't classified
+    # Strip out any points that aren't classified
     # (has is_fishing == Inf)
-    x = np.load(path)['x']
     x = x[~np.isinf(x['is_fishing']) & ~np.isnan(x['is_fishing']) & ~np.isnan(x['timestamp']) & ~np.isnan(x['speed']) & ~np.isnan(x['course'])]
 
     if size > len(x):
@@ -168,14 +173,8 @@ def load_dataset_by_vessel(path, size = 20000, even_split=None, seed=4321):
 
     train_subsample = _subsample_even if even_split else _subsample_proportional
 
-    try:
-        xtrain = train_subsample(x, mmsi[:n1], size//2)
-        xcross = _subsample_proportional(x, mmsi[n1:n2], size//4)
-        xtest = _subsample_proportional(x, mmsi[n2:], size//4)
-    except Exception, e:
-        print "Broken data in", path
-        import pdb, sys
-        sys.last_traceback = sys.exc_info()[2]
-        pdb.set_trace()
+    xtrain = train_subsample(x, mmsi[:n1], size//2)
+    xcross = _subsample_proportional(x, mmsi[n1:n2], size//4)
+    xtest = _subsample_proportional(x, mmsi[n2:], size//4)
 
     return x, xtrain, xcross, xtest
