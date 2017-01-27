@@ -47,7 +47,7 @@ distutils.core.setup(
     install_requires=["numpy", "scikit-learn", "scipy", "rolling_measures"],
     extras_require={
         'dev': ['matplotlib', 'ipython', 'coveralls']},
-    version='1.0',
+    version='1.1',
     author='Egil Moeller, Timothy Hochberg',
     author_email='egil@skytruth.org, tim@skytruth.org',
     url='',
