@@ -8,7 +8,11 @@ class BaseModel(object):
     #     return model
 
     def predict_messages(self, messages):
-        for msg in vessel_scoring.add_measures.AddMeasures(messages, self.windows):
+        if hasattr(self, 'colspec'):
+            windows = self.colspec.windows
+        else:
+            windows = self.windows
+        for msg in vessel_scoring.add_measures.AddMeasures(messages, windows):
             if (msg.get('timestamp', None) is not None and
                 msg.get('speed', None) is not None and
                 msg.get('course', None) is not None):
