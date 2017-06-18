@@ -1,7 +1,7 @@
 from vessel_scoring import utils
 from sklearn import metrics
 import matplotlib.pyplot as plt
-from IPython.core.display import display, HTML, Markdown
+#from IPython.core.display import display, HTML, Markdown
 import pandas
 import os.path
 
@@ -28,7 +28,7 @@ def evaluate_score(score, test_data, name):
 
     precisions, recalls, thresholds = metrics.precision_recall_curve(is_fishy, score)
 
-    display(HTML("<h1>%s</h1>" % name))
+    #display(HTML("<h1>%s</h1>" % name))
 
     ylim = 15.0
 
@@ -96,11 +96,11 @@ def compare_models_at_cutoff(models, test_data, predictions = None):
     for name in sorted(predictions):
         pred, actual = predictions[name]
         lines.append("|{}|{:.2f}|{:.2f}|{:.2f}|".format(
-                name, 
+                name,
                 metrics.recall_score(actual, pred),
-                metrics.precision_score(actual, pred), 
+                metrics.precision_score(actual, pred),
                 metrics.f1_score(actual, pred)))
-    display(Markdown('\n'.join(lines)))
+    #display(Markdown('\n'.join(lines)))
 
 def compare_models(models, test_data):
     is_fishy = utils.is_fishy(test_data)
